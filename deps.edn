@@ -1,0 +1,12 @@
+{:paths   ["src"]
+ :deps    {org.clojure/core.async {:mvn/version "1.3.610"}}
+ :aliases {:test     {:extra-paths ["test"]
+                      :extra-deps  {org.clojure/clojurescript {:mvn/version "1.10.773"}}}
+           :repl     {:extra-paths ["target"]
+                      :extra-deps  {org.clojure/clojurescript {:mvn/version "1.10.773"}
+                                    com.bhauman/figwheel-main {:mvn/version "0.2.11"}
+                                    binaryage/devtools        {:mvn/version "1.0.2"}}
+                      :main-opts   ["-m" "figwheel.main" "-c" "condense.event-loop" "-r"]}
+           :examples {:extra-paths ["examples"]
+                      :extra-deps  {org.clojure/clojurescript {:mvn/version "1.10.773"}
+                                    reagent                   {:mvn/version "0.10.0"}}}}}
