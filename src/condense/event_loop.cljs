@@ -6,38 +6,31 @@
 (def error (partial js/console.error))
 
 (def registry-ref (atom {}))
-(def ^:dynamic current-event nil)
-
-(defn find-in [m ks not-found]
-  (or (get-in m ks)
-      (do (warn ::find-in.not-found m ks) not-found)))
 
 (defn reg
-  [{:keys [kind id] :as m}]
-  (swap! registry-ref assoc-in [kind id] m))
+  [{:keys [id] :as m}]
+  (swap! registry-ref assoc-in [:handlers id] m))
+
+(defn noop [x] (warn ::noop) x)
 
 (defn do-event
-  [{:keys [event fsm input]} [id & args :as v]]
-  (letfn [(do-state [s {:keys [state]}]
-            (state s))
-          (do-input [s [id & args]]
-            (apply (find-in input [id :f] identity) s args))
+  [{:keys [handlers event] :as ctx}]
+  (letfn [(do-input [[id & args]]
+            (apply (get-in handlers [id :input] noop) ctx args))
           (do-transition [[id & args]]
-            (apply (find-in fsm [id :transition] identity) args))]
-    (binding [current-event v]
-      (let [{:keys [f ins]} (find-in event [id] {})
-            s (reduce do-state {} (vals fsm))
-            s (reduce do-input s ins)
-            s' (apply (or f identity) s args)]
-        (doseq [v s']
-          (do-transition v))))))
+            (apply (get-in handlers [id :transition] noop) ctx args))]
+    (let [[id & args] event
+          {:keys [logic ins]} (get handlers id)
+          s (zipmap (map first ins) (map do-input ins))
+          s' (apply (or logic noop) s args)]
+      (doseq [v s'] (do-transition v)))))
 
 (defn process-queue []
   (let [ch (chan 100)]
     (go (loop []
-          (when-let [v (<! ch)]
-            (try (do-event @registry-ref v)
-                 (catch js/Error err (error ::process-queue-ch.err v err)))
+          (when-let [event (<! ch)]
+            (try (do-event (assoc @registry-ref :event event))
+                 (catch js/Error err (error ::process-queue-ch.err event err)))
             (recur))))
     ch))
 
@@ -45,21 +38,23 @@
   (do (some-> queue-ch close!)
       (process-queue)))
 
-(defn dispatch [v]
-  (go (>! queue-ch v)))
+(defn dispatch [event]
+  (go (>! queue-ch event)))
 
-(defn dispatch-sync [v]
-  (do-event @registry-ref v))
+(defn dispatch-sync [event]
+  (do-event (assoc @registry-ref :event event)))
 
-(defn fx-transition [ms]
-  (doseq [m ms [id & args] m]
-    (let [f (find-in @registry-ref [:action id :f] identity)]
-      (apply f args))))
+(defn do-actions
+  [{:keys [handlers]} ms]
+  (doseq [m ms [id & args :as v] m]
+    (try (apply (get-in handlers [id :action] noop) args)
+         (catch js/Error err (error ::fx-transition.err v err)))))
 
 (comment
-  (def app-db (r/atom {}))
-  (reg {:id :db :kind :fsm :state #(assoc % :db @app-db) :transition #(reset! app-db %)})
-  (reg {:id :fx :kind :fsm :state #(assoc % :fx []) :transition fx-transition})
-  (reg {:id :event :kind :input :f (fn [s] (assoc s :event current-event))})
-  (reg {:id :args :kind :input :f (fn [s m] (update s :args merge m))})
-  (reg {:id :dispatch :kind :action :f dispatch}))
+  (do (def app-db (atom {}))
+      (reg {:id :db :input #(deref app-db) :transition #(reset! app-db %2)})
+      (reg {:id :fx :input (constantly []) :transition do-actions})
+      (reg {:id :event :input :event})
+      (reg {:id :args :input second})
+      (reg {:id :dispatch :action dispatch})
+      (dispatch [:bootstrap])))
