@@ -1,60 +1,56 @@
-(ns condense.event-loop
-  (:require [cljs.core.async :refer [go chan <! >! close!]]))
+(ns condense.event-loop)
 
-(def log (partial js/console.log))
-(def warn (partial js/console.warn))
-(def error (partial js/console.error))
+(def registry-ref
+  (atom {:std-ins []
+         :error   (partial js/console.error)}))
 
-(def registry-ref (atom {}))
+(defn cfg [k v] (swap! registry-ref assoc k v))
+(defn reg [{:keys [id] :as m}] (swap! registry-ref assoc-in [:handlers id] m))
 
-(defn reg
-  [{:keys [id] :as m}]
-  (swap! registry-ref assoc-in [:handlers id] m))
-
-(defn noop [x] (warn ::noop) x)
+(defn do-preloads
+  [{:keys [std-ins handlers event] :as ctx}]
+  (let [eid (first event)
+        kps (for [[id & args] (into std-ins (get-in handlers [eid :ins]))
+                  :let [preload (get-in handlers [id :preload])]
+                  :when preload]
+              [id (apply preload args)])]
+    (-> (js/Promise.all (map second kps))
+        (.then (fn [vs] (assoc ctx :preloads (zipmap (map first kps) vs)))))))
 
 (defn do-event
-  [{:keys [handlers event] :as ctx}]
+  [{:keys [std-ins handlers event preloads] :as ctx}]
   (letfn [(do-input [[id & args]]
-            (apply (get-in handlers [id :input] noop) ctx args))
+            (or (some-> (get-in handlers [id :input]) (apply ctx args))
+                (get preloads id)))
           (do-transition [[id & args]]
-            (apply (get-in handlers [id :transition] noop) ctx args))]
-    (let [[id & args] event
-          {:keys [logic ins]} (get handlers id)
+            (some-> (get-in handlers [id :transition]) (apply ctx args)))]
+    (let [[eid & args] event
+          logic (get-in handlers [eid :logic] identity)
+          ins (into std-ins (get-in handlers [eid :ins]))
           s (zipmap (map first ins) (map do-input ins))
-          s' (apply (or logic noop) s args)]
-      (doseq [v s'] (do-transition v)))))
+          s' (apply logic s args)]
+      (doall (map do-transition s')))))
 
-(defn process-queue []
-  (let [ch (chan 100)]
-    (go (loop []
-          (when-let [event (<! ch)]
-            (try (do-event (assoc @registry-ref :event event))
-                 (catch js/Error err (error ::process-queue-ch.err event err)))
-            (recur))))
-    ch))
-
-(def queue-ch
-  (do (some-> queue-ch close!)
-      (process-queue)))
+(defn do-actions
+  [{:keys [error handlers]} ms]
+  (doseq [m ms [id & args :as v] m]
+    (try (apply (get-in handlers [id :action] #()) args)
+         (catch js/Error err (error ::do-actions.err v err)))))
 
 (defn dispatch [event]
-  (go (>! queue-ch event)))
+  (let [{:keys [error] :as ctx} @registry-ref]
+    (-> (do-preloads (assoc ctx :event event))
+        (.then do-event)
+        (.catch (fn [err] (error ::dispatch.err err))))))
 
 (defn dispatch-sync [event]
   (do-event (assoc @registry-ref :event event)))
 
-(defn do-actions
-  [{:keys [handlers]} ms]
-  (doseq [m ms [id & args :as v] m]
-    (try (apply (get-in handlers [id :action] noop) args)
-         (catch js/Error err (error ::fx-transition.err v err)))))
-
 (comment
-  (do (def app-db (atom {}))
-      (reg {:id :db :input #(deref app-db) :transition #(reset! app-db %2)})
-      (reg {:id :fx :input (constantly []) :transition do-actions})
-      (reg {:id :event :input :event})
-      (reg {:id :args :input second})
-      (reg {:id :dispatch :action dispatch})
-      (dispatch [:bootstrap])))
+  (def app-db (r/atom {}))
+  (cfg :std-ins [[:db] [:event]])
+  (reg {:id :db :input #(deref app-db) :transition #(reset! app-db %2)})
+  (reg {:id :fx :transition do-actions})
+  (reg {:id :event :input :event})
+  (reg {:id :dispatch :action dispatch})
+  (dispatch [:bootstrap]))

@@ -1,7 +1,8 @@
 (ns example.re-frame
   "
-  Like re-frame API but with the convention that handlers pass state through and
-  use :fx key to trigger fx.
+  Like re-frame API but...
+   1. by convention that handlers pass state through and use :fx key for effects.
+   2. no interceptors but :ins allows for cofx style input data to be passed to event handlers.
 
   (reg-event-fx ::event1 (fn [ctx] (assoc-in ctx [:db :loading?] true)))
   (reg-event-fx ::event2 (fn [ctx] (update ctx :fx conj {:dispatch [::x]})))
@@ -10,16 +11,16 @@
             [reagent.core :as r]))
 
 (def app-db (r/atom {}))
-(def std-ins [[:db] [:fx] [:event]])
 (defn reg-cofx [id f] (el/reg {:id id :input f}))
 (defn reg-event-fx
-  ([id f] (el/reg {:id id :ins std-ins :logic (fn [{:keys [event] :as ctx}] (f ctx event))}))
-  ([id ins f] (el/reg {:id id :ins (into std-ins ins) :logic (fn [{:keys [event] :as ctx}] (f ctx event))})))
+  ([id f] (el/reg {:id id :logic (fn [{:keys [event] :as ctx}] (f ctx event))}))
+  ([id ins f] (el/reg {:id id :ins ins :logic (fn [{:keys [event] :as ctx}] (f ctx event))})))
 (defn reg-fx [id f] (el/reg {:id id :action f}))
 (def dispatch el/dispatch)
+(def dispatch-sync el/dispatch-sync)
 
+(el/cfg :std-ins [[:db] [:fx] [:event]])
 (el/reg {:id :db :input #(deref app-db) :transition #(reset! app-db %2)})
-(el/reg {:id :fx :input (constantly []) :transition el/do-actions})
+(el/reg {:id :fx :transition el/do-actions})
 (el/reg {:id :event :input :event})
-(el/reg {:id :args :input second})
-(el/reg {:id :dispatch :action dispatch})
+(el/reg {:id :dispatch :action el/dispatch})
