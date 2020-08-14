@@ -31,10 +31,10 @@ We will start by registering a :db handler with :input and :transition fns.  The
 ```cljs
 (reg {:id :db
       :input (fn [] @app-db) 
-      :transition (fn [] (reset! app-db %2)}))
+      :transition (fn [_ db] (reset! app-db db)}))
 ```
 
-Next, we're registering a :fx handler with a :transition fn which will process any side-effects required by handler.
+Next, we're registering a :fx handler with a :transition fn which will process any side-effects required by our logic.
 ```cljs
 (reg {:id :fx :transition do-actions})
 ```
@@ -62,29 +62,29 @@ Okay, the plumbing is in place.
 Now let's write some business logic.  They take state and transform it.
 
 The most common tranformations our logic will make are
- 1. updating the :db with something e.g. `(assoc-in s [:db :loading?] true)` 
+ 1. updating the :db to change the application state e.g. `(assoc-in s [:db :loading?] true)` 
  2. updating the :fx to trigger some action e.g. `(update s :fx conj {:dispatch [:some-event]})`
 
 ```cljs
-(defn log-state [s] (println ::log.state s) s)
+(defn log-state [s] (println :log-state s) s)
 (defn set-loading [s] (assoc-in s [:db :loading?] true))
 (defn clear-loading [s] (update s :db dissoc :loading?))
-(defn get-data [s] (update s :fx conj {::GET {:url "/endpoint/data" :cb #(dispatch [::get-resp %])}}))
+(defn get-data [s] (update s :fx conj {::GET {:url "/endpoint/data" :cb #(dispatch [:app/get-resp %])}}))
 (defn get-resp [s] (assoc-in s [:db :data] (get-in s [:event 1])))
 (defn GET [{:keys [cb]}] (js/setTimeout #(cb {:results [1 2 3]}) 1000))
 ```
 
 ## Registering handlers
-Now let's register some :logic handlers.  
+Now let's register our event handlers with :logic fns.  
 
 ```cljs
-(reg {:id ::bootstrap :logic (comp set-loading get-data log-state)})
-(reg {:id ::get-resp :logic (comp get-resp clear-loading log-state)})
+(reg {:id :app/bootstrap :logic (comp set-loading get-data log-state)})
+(reg {:id :app/get-resp :logic (comp get-resp clear-loading log-state)})
 ```
 
-We also need to register our :action handler to fetch data.
+We also need to register our :app/GET handler with :action fn.
 ```cljs
-(reg {:id ::GET :action GET})
+(reg {:id :app/GET :action GET})
 ```
 
 ## Debug
