@@ -31,11 +31,11 @@
           s' (apply logic s args)]
       (doall (map do-transition s')))))
 
-(defn do-actions
+(defn do-effects
   [{:keys [error handlers]} ms]
   (doseq [m ms [id & args :as v] m]
-    (try (apply (get-in handlers [id :action] #()) args)
-         (catch js/Error err (error ::do-actions.err v err)))))
+    (try (apply (get-in handlers [id :effect] #()) args)
+         (catch js/Error err (error ::do-effects.err v err)))))
 
 (defn dispatch [event]
   (let [{:keys [error] :as ctx} @registry-ref]
@@ -50,7 +50,7 @@
   (def app-db (r/atom {}))
   (cfg :std-ins [[:db] [:event]])
   (reg {:id :db :input #(deref app-db) :transition #(reset! app-db %2)})
-  (reg {:id :fx :transition do-actions})
+  (reg {:id :fx :transition do-effects})
   (reg {:id :event :input :event})
-  (reg {:id :dispatch :action dispatch})
+  (reg {:id :dispatch :effect dispatch})
   (dispatch [:bootstrap]))

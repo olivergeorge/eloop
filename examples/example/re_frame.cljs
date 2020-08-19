@@ -15,12 +15,12 @@
 (defn reg-event-fx
   ([id f] (el/reg {:id id :logic (fn [{:keys [event] :as ctx}] (f ctx event))}))
   ([id ins f] (el/reg {:id id :ins ins :logic (fn [{:keys [event] :as ctx}] (f ctx event))})))
-(defn reg-fx [id f] (el/reg {:id id :action f}))
+(defn reg-fx [id f] (el/reg {:id id :effect f}))
 (def dispatch el/dispatch)
 (def dispatch-sync el/dispatch-sync)
 
 (el/cfg :std-ins [[:db] [:fx] [:event]])
 (el/reg {:id :db :input #(deref app-db) :transition #(reset! app-db %2)})
-(el/reg {:id :fx :transition el/do-actions})
+(el/reg {:id :fx :transition el/do-effects})
 (el/reg {:id :event :input :event})
-(el/reg {:id :dispatch :action el/dispatch})
+(el/reg {:id :dispatch :effect el/dispatch})

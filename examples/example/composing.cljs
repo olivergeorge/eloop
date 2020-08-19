@@ -2,7 +2,7 @@
   "
   Demonstrates an app which composes handlers out of simple app logic functions.
   "
-  (:require [condense.event-loop :refer [cfg reg do-actions dispatch]]
+  (:require [condense.event-loop :refer [cfg reg do-effects dispatch]]
             [clojure.data :as data]
             [reagent.core :as r]))
 
@@ -10,9 +10,9 @@
 (def app-db (r/atom {}))
 (cfg :std-ins [[:db] [:fx] [:event]])
 (reg {:id :db :input #(deref app-db) :transition #(reset! app-db %2)})
-(reg {:id :fx :transition do-actions})
+(reg {:id :fx :transition do-effects})
 (reg {:id :event :input :event})
-(reg {:id :dispatch :action dispatch})
+(reg {:id :dispatch :effect dispatch})
 (reg {:id :args :input second})
 
 ; App logic
@@ -26,7 +26,7 @@
 ; Composing handlers
 (reg {:id ::bootstrap :logic (comp set-loading get-data log-state)})
 (reg {:id ::get-resp :logic (comp get-resp clear-loading log-state)})
-(reg {:id ::GET :action GET})
+(reg {:id ::GET :effect GET})
 
 ;; Debug
 (defn diff-report [k [a b]] (println k) (println :only-before a) (println :only-after b))
