@@ -93,7 +93,7 @@ We also need to register our :app/GET handler with :effect fn.
 Perhaps it'll be useful to watch the app-db and observe what data is changing.
 
 ```cljs
-(defn diff-report [k [a b]] (println "app-db change:\n  only-before" a "\n  only-after" b))
+(defn diff-report [[a b]] (println "app-db change:\n  only-before" a "\n  only-after" b))
 (add-watch app-db ::app-db (fn [k _ o n] (diff-report (clojure.data/diff o n))))
 ```
 
