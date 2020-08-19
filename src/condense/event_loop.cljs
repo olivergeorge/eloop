@@ -37,9 +37,12 @@
     (try (apply (get-in handlers [id :effect] #()) args)
          (catch js/Error err (error ::do-effects.err v err)))))
 
+(defn init-ctx [event]
+  (assoc @registry-ref :event event))
+
 (defn dispatch [event]
-  (let [{:keys [error] :as ctx} @registry-ref]
-    (-> (do-preloads (assoc ctx :event event))
+  (let [{:keys [error] :as ctx} (init-ctx event)]
+    (-> (do-preloads ctx)
         (.then do-event)
         (.catch (fn [err] (error ::dispatch.err err))))))
 
