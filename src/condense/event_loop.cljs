@@ -14,14 +14,14 @@
     (error (ex-info msg (with-meta data ctx) err))))
 
 (defn do-log
-  [{:keys [event log] :as ctx} k & args]
-  (when log
+  [{:keys [event handlers log] :as ctx} k & args]
+  (when-let [log (get-in handlers [k :log] log)]
     (log event (with-meta (apply list (symbol k) 'ctx args) ctx))))
 
 (defn do-preload
   [{:keys [handlers] :as ctx} [id & args :as v]]
-  (do-log ctx ::do-preload v)
-  (let [f (get-in handlers [id :preload] #())]
+  (when-let [f (get-in handlers [id :preload])]
+    (do-log ctx ::do-preload v)
     [id (apply f args)]))
 
 (defn do-preloads
@@ -29,7 +29,7 @@
   (do-log ctx ::do-preloads)
   (let [eid (first event)
         ins (into std-ins (get-in handlers [eid :ins]))
-        kps (map (partial do-preload ctx) ins)]
+        kps (keep (partial do-preload ctx) ins)]
     (-> (js/Promise.all (map second kps))
         (.then (fn [vs] (assoc ctx :preloads (zipmap (map first kps) vs)))))))
 
