@@ -41,8 +41,9 @@
 
 (defn do-transition
   [{:keys [handlers] :as ctx} [id & args :as v]]
-  (do-log ctx ::do-transition v)
-  (some-> (get-in handlers [id :transition]) (apply ctx args)))
+  (when-let [f (get-in handlers [id :transition])]
+    (do-log ctx ::do-transition v)
+    (apply f ctx args)))
 
 (defn do-event
   [{:keys [std-ins handlers event] :as ctx}]
