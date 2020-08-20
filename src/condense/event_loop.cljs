@@ -69,11 +69,15 @@
 (defn init-ctx [event]
   (assoc @registry-ref :event event))
 
+(defn do-dispatch
+  [ctx]
+  (do-log ctx ::do-dispatch)
+  (-> (do-preloads ctx)
+      (.then do-event)
+      (.catch (fn [err] (do-error ctx ::do-dispatch.err {} err)))))
+
 (defn dispatch [event]
-  (let [ctx (init-ctx event)]
-    (-> (do-preloads ctx)
-        (.then do-event)
-        (.catch (fn [err] (do-error ctx ::do-dispatch.err {} err))))))
+  (do-dispatch (init-ctx event)))
 
 (defn dispatch-sync [event]
   (do-event (assoc @registry-ref :event event)))
