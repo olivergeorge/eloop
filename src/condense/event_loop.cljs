@@ -54,11 +54,16 @@
         s' (apply logic s args)]
     (doall (map (partial do-transition ctx) s'))))
 
+(defn do-effect
+  [{:keys [handlers] :as ctx} [id & args :as v]]
+  (do-log ctx ::do-effect v)
+  (apply (get-in handlers [id :effect] #()) args))
+
 (defn do-effects
-  [{:keys [handlers] :as ctx} ms]
+  [ctx ms]
   (do-log ctx ::do-effects ms)
-  (doseq [m ms [id & args :as v] m]
-    (try (apply (get-in handlers [id :effect] #()) args)
+  (doseq [m ms v m :when v]
+    (try (do-effect ctx v)
          (catch js/Error err (do-error ctx ::do-effects.err {:v v} err)))))
 
 (defn init-ctx [event]
