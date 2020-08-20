@@ -101,5 +101,5 @@ Perhaps it'll be useful to watch the app-db and observe what data is changing.
 Did it work?  Let's dispatch an event and see.
 
 ```cljs
-(dispatch [::bootstrap]))
+(dispatch [:app/bootstrap]))
 ```
