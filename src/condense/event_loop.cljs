@@ -33,20 +33,26 @@
     (-> (js/Promise.all (map second kps))
         (.then (fn [vs] (assoc ctx :preloads (zipmap (map first kps) vs)))))))
 
+(defn do-input
+  [{:keys [handlers preloads] :as ctx} [id & args :as v]]
+  (do-log ctx ::do-input v)
+  (or (some-> (get-in handlers [id :input]) (apply ctx args))
+      (get preloads id)))
+
+(defn do-transition
+  [{:keys [handlers] :as ctx} [id & args :as v]]
+  (do-log ctx ::do-transition v)
+  (some-> (get-in handlers [id :transition]) (apply ctx args)))
+
 (defn do-event
-  [{:keys [std-ins handlers event preloads] :as ctx}]
+  [{:keys [std-ins handlers event] :as ctx}]
   (do-log ctx ::do-event)
-  (letfn [(do-input [[id & args]]
-            (or (some-> (get-in handlers [id :input]) (apply ctx args))
-                (get preloads id)))
-          (do-transition [[id & args]]
-            (some-> (get-in handlers [id :transition]) (apply ctx args)))]
-    (let [[eid & args] event
-          logic (get-in handlers [eid :logic] identity)
-          ins (into std-ins (get-in handlers [eid :ins]))
-          s (zipmap (map first ins) (map do-input ins))
-          s' (apply logic s args)]
-      (doall (map do-transition s')))))
+  (let [[eid & args] event
+        logic (get-in handlers [eid :logic] identity)
+        ins (into std-ins (get-in handlers [eid :ins]))
+        s (zipmap (map first ins) (map (partial do-input ctx) ins))
+        s' (apply logic s args)]
+    (doall (map (partial do-transition ctx) s'))))
 
 (defn do-effects
   [{:keys [handlers] :as ctx} ms]
