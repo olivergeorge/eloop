@@ -94,6 +94,6 @@
   (reg {:id :event :input :event})
   (reg {:id :dispatch :effect dispatch})
   (defn set-loading [s] (assoc-in s [:db :loading?] true))
-  (defn fetch-data [s] (-> s  (update :fx conj {:GET "/some/url"})))
+  (defn fetch-data [s] (-> s (update :fx conj {:GET "/some/url"})))
   (reg {:id :bootstrap :logic (comp set-loading fetch-data)})
   (dispatch [:bootstrap]))
