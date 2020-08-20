@@ -13,9 +13,9 @@
     (error (ex-info msg (with-meta data ctx) err))))
 
 (defn do-log
-  [{:keys [event handlers log] :as ctx} k & args]
+  [{:keys [handlers log] :as ctx} k & args]
   (when-let [log (get-in handlers [k :log] log)]
-    (log event (with-meta (apply list (symbol k) 'ctx args) ctx))))
+    (apply log ctx k args)))
 
 (defn do-preload
   [{:keys [handlers] :as ctx} [id & args :as v]]
@@ -83,10 +83,12 @@
   (do-event (init-ctx event)))
 
 (comment
-  (def log-whitelist #{`do-event `do-effect})
-  (cfg :log (fn [event form] (when (log-whitelist (first form)) (js/console.log event form))))
   (def app-db (atom {}))
   (cfg :std-ins [[:db] [:event]])
+  (defn form-logger [ctx k & args]
+    (when (#{::do-event ::do-transition} k)
+      (js/console.log (:event ctx) (with-meta (apply list (symbol k) 'ctx args) ctx))))
+  (cfg :log form-logger)
   (reg {:id :db :input #(deref app-db) :transition #(reset! app-db %2)})
   (reg {:id :fx :transition do-effects})
   (reg {:id :event :input :event})
