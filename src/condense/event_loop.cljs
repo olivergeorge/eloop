@@ -18,14 +18,18 @@
   (when log
     (log event (with-meta (apply list (symbol k) 'ctx args) {:ctx ctx}))))
 
+(defn do-preload
+  [{:keys [handlers] :as ctx} [id & args :as v]]
+  (do-log ctx ::do-preload v)
+  (let [f (get-in handlers [id :preload] #())]
+    [id (apply f args)]))
+
 (defn do-preloads
   [{:keys [std-ins handlers event] :as ctx}]
   (do-log ctx ::do-preloads)
   (let [eid (first event)
-        kps (for [[id & args] (into std-ins (get-in handlers [eid :ins]))
-                  :let [preload (get-in handlers [id :preload])]
-                  :when preload]
-              [id (apply preload args)])]
+        ins (into std-ins (get-in handlers [eid :ins]))
+        kps (map (partial do-preload ctx) ins)]
     (-> (js/Promise.all (map second kps))
         (.then (fn [vs] (assoc ctx :preloads (zipmap (map first kps) vs)))))))
 
