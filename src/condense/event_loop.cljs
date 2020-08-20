@@ -80,7 +80,7 @@
   (do-dispatch (init-ctx event)))
 
 (defn dispatch-sync [event]
-  (do-event (assoc @registry-ref :event event)))
+  (do-event (init-ctx event)))
 
 (comment
   (def app-db (r/atom {}))
