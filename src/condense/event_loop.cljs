@@ -2,13 +2,25 @@
 
 (def registry-ref
   (atom {:std-ins []
+         :log     (partial js/console.log)
          :error   (partial js/console.error)}))
 
 (defn cfg [k v] (swap! registry-ref assoc k v))
 (defn reg [{:keys [id] :as m}] (swap! registry-ref assoc-in [:handlers id] m))
 
+(defn do-error
+  [{:keys [error] :as ctx} msg data err]
+  (when error
+    (error (ex-info msg (with-meta data {:ctx ctx}) err))))
+
+(defn do-log
+  [{:keys [event log] :as ctx} k & args]
+  (when log
+    (log event (with-meta (apply list (symbol k) 'ctx args) {:ctx ctx}))))
+
 (defn do-preloads
   [{:keys [std-ins handlers event] :as ctx}]
+  (do-log ctx ::do-preloads)
   (let [eid (first event)
         kps (for [[id & args] (into std-ins (get-in handlers [eid :ins]))
                   :let [preload (get-in handlers [id :preload])]
@@ -19,6 +31,7 @@
 
 (defn do-event
   [{:keys [std-ins handlers event preloads] :as ctx}]
+  (do-log ctx ::do-event)
   (letfn [(do-input [[id & args]]
             (or (some-> (get-in handlers [id :input]) (apply ctx args))
                 (get preloads id)))
@@ -32,19 +45,20 @@
       (doall (map do-transition s')))))
 
 (defn do-effects
-  [{:keys [error handlers]} ms]
+  [{:keys [handlers] :as ctx} ms]
+  (do-log ctx ::do-effects ms)
   (doseq [m ms [id & args :as v] m]
     (try (apply (get-in handlers [id :effect] #()) args)
-         (catch js/Error err (error ::do-effects.err v err)))))
+         (catch js/Error err (do-error ctx ::do-effects.err {:v v} err)))))
 
 (defn init-ctx [event]
   (assoc @registry-ref :event event))
 
 (defn dispatch [event]
-  (let [{:keys [error] :as ctx} (init-ctx event)]
+  (let [ctx (init-ctx event)]
     (-> (do-preloads ctx)
         (.then do-event)
-        (.catch (fn [err] (error ::dispatch.err err))))))
+        (.catch (fn [err] (do-error ctx ::do-dispatch.err {} err))))))
 
 (defn dispatch-sync [event]
   (do-event (assoc @registry-ref :event event)))
