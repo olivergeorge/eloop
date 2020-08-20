@@ -83,7 +83,7 @@
   (do-event (init-ctx event)))
 
 (comment
-  (def app-db (r/atom {}))
+  (def app-db (atom {}))
   (cfg :std-ins [[:db] [:event]])
   (reg {:id :db :input #(deref app-db) :transition #(reset! app-db %2)})
   (reg {:id :fx :transition do-effects})
