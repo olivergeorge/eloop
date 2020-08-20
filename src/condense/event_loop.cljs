@@ -2,7 +2,6 @@
 
 (def registry-ref
   (atom {:std-ins []
-         :log     (partial js/console.log)
          :error   (partial js/console.error)}))
 
 (defn cfg [k v] (swap! registry-ref assoc k v))
