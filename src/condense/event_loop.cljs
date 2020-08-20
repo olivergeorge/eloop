@@ -83,10 +83,15 @@
   (do-event (init-ctx event)))
 
 (comment
+  (def log-whitelist #{`do-event `do-effect})
+  (cfg :log (fn [event form] (when (log-whitelist (first form)) (js/console.log event form))))
   (def app-db (atom {}))
   (cfg :std-ins [[:db] [:event]])
   (reg {:id :db :input #(deref app-db) :transition #(reset! app-db %2)})
   (reg {:id :fx :transition do-effects})
   (reg {:id :event :input :event})
   (reg {:id :dispatch :effect dispatch})
+  (defn set-loading [s] (assoc-in s [:db :loading?] true))
+  (defn fetch-data [s] (-> s  (update :fx conj {:GET "/some/url"})))
+  (reg {:id :bootstrap :logic (comp set-loading fetch-data)})
   (dispatch [:bootstrap]))
