@@ -11,12 +11,12 @@
 (defn do-error
   [{:keys [error] :as ctx} msg data err]
   (when error
-    (error (ex-info msg (with-meta data {:ctx ctx}) err))))
+    (error (ex-info msg (with-meta data ctx) err))))
 
 (defn do-log
   [{:keys [event log] :as ctx} k & args]
   (when log
-    (log event (with-meta (apply list (symbol k) 'ctx args) {:ctx ctx}))))
+    (log event (with-meta (apply list (symbol k) 'ctx args) ctx))))
 
 (defn do-preload
   [{:keys [handlers] :as ctx} [id & args :as v]]
