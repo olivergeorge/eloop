@@ -1,8 +1,9 @@
 (ns condense.event-loop)
 
 (def registry-ref
-  (atom {:std-ins []
-         :error   (partial js/console.error)}))
+  (atom {:std-ins     {}
+         :dispatch-fn first
+         :error       (partial js/console.error)}))
 
 (defn cfg [k v] (swap! registry-ref assoc k v))
 (defn reg [{:keys [id] :as m}] (swap! registry-ref assoc-in [:handlers id] m))
@@ -18,46 +19,50 @@
     (apply log ctx k args)))
 
 (defn do-preload
-  [{:keys [handlers] :as ctx} [id & args :as v]]
-  (when-let [f (get-in handlers [id :preload])]
-    (do-log ctx ::do-preload v)
-    [id (apply f args)]))
+  [{:keys [handlers dispatch-fn] :as ctx} [k data]]
+  (let [id (dispatch-fn [k data])]
+    (when-let [f (get-in handlers [id :preload])]
+      (do-log ctx ::do-preload data)
+      [k (f ctx data)])))
 
 (defn do-preloads
-  [{:keys [std-ins handlers event] :as ctx}]
+  [{:keys [std-ins handlers event dispatch-fn] :as ctx}]
   (do-log ctx ::do-preloads)
-  (let [eid (first event)
-        ins (into std-ins (get-in handlers [eid :ins]))
+  (let [id (dispatch-fn event)
+        ins (merge std-ins (get-in handlers [id :ins]))
         kps (keep (partial do-preload ctx) ins)]
     (-> (js/Promise.all (map second kps))
         (.then (fn [vs] (assoc ctx :preloads (zipmap (map first kps) vs)))))))
 
 (defn do-input
-  [{:keys [handlers preloads] :as ctx} [id & args :as v]]
-  (do-log ctx ::do-input v)
-  (or (some-> (get-in handlers [id :input]) (apply ctx args))
-      (get preloads id)))
+  [{:keys [handlers dispatch-fn] :as ctx} [k data]]
+  (do-log ctx ::do-input [k data])
+  (let [id (dispatch-fn data)]
+    (when-let [f (get-in handlers [id :input])]
+      [k (f ctx data)])))
 
 (defn do-transition
-  [{:keys [handlers] :as ctx} [id & args :as v]]
+  [{:keys [handlers] :as ctx} [id data]]
   (when-let [f (get-in handlers [id :transition])]
-    (do-log ctx ::do-transition v)
-    (apply f ctx args)))
+    (do-log ctx ::do-transition data)
+    (f ctx data)))
 
 (defn do-event
-  [{:keys [std-ins handlers event] :as ctx}]
+  [{:keys [std-ins handlers event preloads dispatch-fn] :as ctx}]
   (do-log ctx ::do-event)
-  (let [[eid & args] event
-        logic (get-in handlers [eid :logic] identity)
-        ins (into std-ins (get-in handlers [eid :ins]))
-        s (zipmap (map first ins) (map (partial do-input ctx) ins))
-        s' (apply logic s args)]
+  (let [id (dispatch-fn event)
+        logic (get-in handlers [id :logic] identity)
+        ins (merge std-ins (get-in handlers [id :ins]))
+        s (into preloads (keep (partial do-input ctx) ins))
+        s' (logic s event)]
     (doall (map (partial do-transition ctx) s'))))
 
 (defn do-effect
-  [{:keys [handlers] :as ctx} [id & args :as v]]
-  (do-log ctx ::do-effect v)
-  (apply (get-in handlers [id :effect] #()) args))
+  [{:keys [handlers dispatch-fn] :as ctx} data]
+  (do-log ctx ::do-effect data)
+  (let [id (dispatch-fn data)]
+    (when-let [f (get-in handlers [id :effect])]
+      (f data))))
 
 (defn do-effects
   [ctx ms]
@@ -82,9 +87,9 @@
 (defn dispatch-sync [event]
   (do-event (init-ctx event)))
 
-(comment
+(do
   (def app-db (atom {}))
-  (cfg :std-ins [[:db] [:event]])
+  (cfg :std-ins {:db [:db] :event [:event]})
   (defn form-logger [ctx k & args]
     (when (#{::do-event ::do-transition} k)
       (js/console.log (:event ctx) (with-meta (apply list (symbol k) 'ctx args) ctx))))

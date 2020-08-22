@@ -54,7 +54,7 @@ Our logic will often want to reference the data passed with the event.  We'll ad
 
 Finally, we'll make the standard inputs available to all :logic handlers.  Individual handlers can add more.
 ```cljs
-(cfg :std-ins [[:db] [:fx] [:event]])
+(cfg :std-ins {:db [:db] :fx [:fx] :event [:event]})
 ```
 
 Okay, the plumbing is in place.
@@ -103,3 +103,26 @@ Did it work?  Let's dispatch an event and see.
 ```cljs
 (dispatch [:app/bootstrap]))
 ```
+
+## Advanced
+
+### Logging
+
+Each step in the event loop can log.  That has the potential to be verbose but you can control which bits you watch.
+
+Here's a logger which logs do-event and do-transition to the console.  It includes the full context at both steps as metadata.  
+```cljs
+(defn form-logger [ctx k & args]
+  (when (#{:condense.event-loop/do-event :condense.event-loop/do-transition} k)
+    (js/console.log k (with-meta (:event ctx) ctx))))
+
+(cfg :log form-logger)
+```
+
+### dispatch-fn 
+
+The event data type used when dispatching is a choice.  The only requirement is that a multimethod style `:dispatch-fn` is provided to get the handler id.
+
+By default, `:dispatch-fn` is `first` which allows for re-frame style vector style (e.g. `(dispatch [:event-id arg])`).
+ 
+To dispatch maps (e.g. `(dispatch {:id :event-id :data arg})`) set :dispatch-fn to something like `:id`. 
